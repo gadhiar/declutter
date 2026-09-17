@@ -196,20 +196,6 @@ def _dedupe_sorted(paths: Iterable[Path]) -> list[Path]:
 # --------------------------------------------------------------------------
 
 
-def _git_env() -> dict:
-    """The environment to run git subprocesses in.
-
-    GIT_DIR and GIT_WORK_TREE, if set in the ambient environment, override
-    git's normal repository discovery from `cwd`. declutter always wants
-    discovery to follow `cwd`, so both are stripped for every git
-    subprocess it runs.
-    """
-    env = dict(os.environ)
-    env.pop("GIT_DIR", None)
-    env.pop("GIT_WORK_TREE", None)
-    return env
-
-
 def _git_toplevel(cwd: Path) -> Path | None:
     try:
         result = subprocess.run(
@@ -217,7 +203,6 @@ def _git_toplevel(cwd: Path) -> Path | None:
             cwd=cwd,
             capture_output=True,
             text=True,
-            env=_git_env(),
         )
     except FileNotFoundError:
         return None
@@ -228,9 +213,7 @@ def _git_toplevel(cwd: Path) -> Path | None:
 
 def _run_git(cwd: Path, args: list[str]) -> str:
     try:
-        result = subprocess.run(
-            ["git", *args], cwd=cwd, capture_output=True, text=True, env=_git_env()
-        )
+        result = subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True)
     except FileNotFoundError as exc:
         raise UsageError("git is required for this selection mode, and was not found") from exc
     if result.returncode != 0:

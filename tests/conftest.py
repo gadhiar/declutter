@@ -17,10 +17,27 @@ import pytest
 SRC = Path(__file__).resolve().parents[1] / "src"
 
 
+def _no_ambient_git_dir_env():
+    """An environment with GIT_DIR/GIT_WORK_TREE stripped.
+
+    declutter itself does not touch these (it lets git behave normally, and
+    a caller who has deliberately set GIT_DIR gets what they asked for). But
+    the harness that runs this test suite sets both process-wide so that a
+    bare `git` invocation targets the worktree's own repo -- and every test
+    here that creates or checks a throwaway repo elsewhere (tmp_path) must
+    not inherit that, or git silently ignores `cwd` and operates on the
+    harness's repo instead.
+    """
+    env = dict(os.environ)
+    env.pop("GIT_DIR", None)
+    env.pop("GIT_WORK_TREE", None)
+    return env
+
+
 @pytest.fixture
 def run_declutter():
     def _run(args, cwd, env=None):
-        full_env = dict(os.environ)
+        full_env = _no_ambient_git_dir_env()
         full_env["PYTHONPATH"] = str(SRC)
         if env:
             full_env.update(env)
@@ -33,21 +50,6 @@ def run_declutter():
         )
 
     return _run
-
-
-def _no_ambient_git_dir_env():
-    """An environment with GIT_DIR/GIT_WORK_TREE stripped.
-
-    The harness that runs this container sets both process-wide so that a
-    bare `git` invocation targets the worktree's own repo. Any git command a
-    test runs against a different, throwaway repo must not inherit that, or
-    it ends up trying (and failing, read-only) to write into the harness's
-    repo instead of the one under tmp_path.
-    """
-    env = dict(os.environ)
-    env.pop("GIT_DIR", None)
-    env.pop("GIT_WORK_TREE", None)
-    return env
 
 
 @pytest.fixture
