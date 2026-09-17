@@ -401,24 +401,18 @@ def _git_all_names(root: Path) -> list[str] | None:
 
 
 def _build_report(
-    selection: Selection | Iterable[Path],
+    selection: Selection,
     root: Path,
     *,
     critical_only: bool,
-    scope_name: str = SCOPE_ALL,
+    scope_name: str,
 ) -> dict:
     findings: list[dict] = []
     files_checked = 0
     files_skipped = 0
     out_of_scope = 0
 
-    # A bare Path means whole-file judgement: that is what a caller who never
-    # named any lines is asking for, and it keeps in-process callers (the
-    # prompt dogfooding test, for one) from having to build a Selection.
-    for path, touched in (
-        item if isinstance(item, tuple) else (item, TouchedLines.whole())
-        for item in selection
-    ):
+    for path, touched in selection:
         try:
             raw = path.read_bytes()
         except OSError as exc:
@@ -517,9 +511,14 @@ def _print_human_report(report: dict) -> None:
         )
     summary = report["summary"]
     counts = summary["counts_by_severity"]
+    # The scope belongs on the summary line because the counts mean nothing
+    # without it: "critical=0" under changed-lines says this change is clean,
+    # not that the files are. The out-of-scope line then says how much history
+    # was set aside, so a clean run never looks cleaner than it is.
     print(
-        "declutter: {checked} file(s) checked, {skipped} skipped -- "
-        "critical={critical} warning={warning} info={info}".format(
+        "declutter: scope={scope} -- {checked} file(s) checked, {skipped} "
+        "skipped -- critical={critical} warning={warning} info={info}".format(
+            scope=summary["scope"],
             checked=summary["files_checked"],
             skipped=summary["files_skipped"],
             critical=counts["critical"],
@@ -527,6 +526,12 @@ def _print_human_report(report: dict) -> None:
             info=counts["info"],
         )
     )
+    out_of_scope = summary["out_of_scope_findings"]
+    if out_of_scope:
+        print(
+            f"declutter: {out_of_scope} finding(s) outside the checked lines "
+            "were not reported"
+        )
 
 
 def _write_json(report: dict, output: str) -> None:
