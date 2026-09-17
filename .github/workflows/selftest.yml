@@ -1,0 +1,46 @@
+name: Self-test
+
+# Runs in this repository only: the test suite, plus a call into the
+# reusable check.yml workflow defined alongside this file, so that the
+# reusable workflow is exercised by an actual `uses:` call before any
+# other repository ever depends on it.
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4 # major-version tag: no network access at authoring time to resolve and pin a commit SHA; SHA-pinning this is the intended hardening.
+
+      - uses: actions/setup-python@v5 # major-version tag: see note above.
+        with:
+          python-version: '3.11'
+
+      - name: Run pytest
+        run: python -m pytest -q -p no:cacheprovider
+
+  self-check:
+    name: Self-check via reusable workflow
+    needs: test
+    # Local path form (`./...`), so this always calls the copy of
+    # check.yml at the commit under test on this run, never a published
+    # copy elsewhere.
+    uses: ./.github/workflows/check.yml
+    with:
+      # This job is both caller and declutter repository at once, so
+      # github.repository is correct here in a way it would not be for an
+      # external consumer -- see check.yml's declutter-repository
+      # description.
+      declutter-repository: ${{ github.repository }}
+      # Pinned to the exact commit under test, not a branch, so this
+      # checks the code this workflow run is actually validating.
+      declutter-ref: ${{ github.sha }}
+      mode: all
+      critical-only: true
