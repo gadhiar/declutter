@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "default_timeout": 30.0,
+  "invocations": [
+    {"id": "classify_positive", "argv": ["-m", "pkg", "5"], "expected_exit_code": 0},
+    {"id": "classify_negative", "argv": ["-m", "pkg", "-3"], "expected_exit_code": 0},
+    {"id": "classify_zero", "argv": ["-m", "pkg", "0"], "expected_exit_code": 0}
+  ],
+  "interface_modules": ["pkg/core.py"],
+  "mutation": {
+    "target_modules": ["pkg/core.py"],
+    "test_command": {
+      "argv": ["-m", "unittest", "discover", "-s", "tests", "-t", "."]
+    },
+    "max_mutants": 25,
+    "kill_rate_tolerance": 0.0
+  },
+  "scrub_rules": []
+}
