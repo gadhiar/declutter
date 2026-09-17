@@ -165,8 +165,16 @@ def _resolve_explicit_files(raw_paths: Iterable[str], cwd: Path) -> list[Path]:
 
 
 def _selected_from_git_names(names: Iterable[str], root: Path) -> list[Path]:
+    # The directory exclusion policy applies here as well as in --all. Without
+    # it the same tree gets opposite verdicts depending on the selection flag:
+    # a tracked build/ or a vendored node_modules/ is skipped by --all but
+    # reported by --staged and --changed-since, because git only filters the
+    # untracked arm (via --exclude-standard) and never the tracked one.
     resolved: list[Path] = []
     for name in names:
+        parts = Path(name).parts
+        if any(policy.is_excluded_dir(part) for part in parts[:-1]):
+            continue
         p = (root / name).resolve()
         if p.is_file() and policy.is_checked_extension(p.name):
             resolved.append(p)
@@ -265,14 +273,19 @@ def _build_report(paths: list[Path], root: Path, *, critical_only: bool) -> dict
         rel = _repo_relative(path, root)
         findings.extend(_scan_text(text, rel))
 
+    # Count before filtering. --critical-only narrows what is *reported*, not
+    # what was found, and summary.counts_by_severity is the machine-readable
+    # record of the scan: a consumer reading warning=0 out of the uploaded JSON
+    # must not conclude the tree is clean of warnings merely because the run
+    # was asked to print criticals only.
+    counts_by_severity = {"critical": 0, "warning": 0, "info": 0}
+    for finding in findings:
+        counts_by_severity[finding["severity"]] += 1
+
     if critical_only:
         findings = [f for f in findings if f["severity"] == "critical"]
 
     findings.sort(key=lambda f: (f["path"], f["line"], f["column"], f["pattern"]))
-
-    counts_by_severity = {"critical": 0, "warning": 0, "info": 0}
-    for finding in findings:
-        counts_by_severity[finding["severity"]] += 1
 
     exit_code = 1 if counts_by_severity["critical"] > 0 else 0
 

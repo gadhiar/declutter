@@ -92,9 +92,11 @@ on:
         default: ''
 
 # Least privilege: this workflow only reads code and writes a build
-# artifact, and it must never gain the ability to touch a secret -- there
-# is no `secrets:` block anywhere in this file, and nothing here reads
-# `${{ secrets.* }}`.
+# artifact, and it must never gain the ability to touch a secret. It
+# declares no secrets block and reads no repository secret of any kind.
+# That assertion is deliberately written without the interpolation syntax
+# for a secret, so that grepping this directory for secret usage does not
+# hit the one file claiming there is none.
 permissions:
   contents: read
 

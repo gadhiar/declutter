@@ -8,11 +8,21 @@ Provenance note: this content was captured from the mist.ai working tree. The
 agents on this goal are confined to the declutter worktree and were refused
 every git invocation against mist.ai, so these bytes are NOT verified equal to
 the blob at commit 6ca9f74. Confirm with
-`git -C <mist.ai> diff 6ca9f74 -- backend/chat/slop_detector.py` and correct
-this file if that diff is non-empty.
+`git -C <mist.ai> diff 6ca9f74 -- backend/chat/slop_detector.py`.
 
-Do not edit the regex bodies to improve them. The parity test asserts that
-declutter.patterns matches this file.
+That diff is expected to be non-empty in exactly one respect: the two
+`declutter: allow=...` pragma comments below, which cannot appear in a mist.ai
+blob written before declutter existed, and which this repository needs in order
+to pass its own checker. Ignore those two comments when comparing. If anything
+else differs, the regex bodies here are wrong and this file should be corrected
+to match the blob -- do not remove the pragmas, which would reintroduce 73
+critical findings in this repository's own `check --all` run.
+
+What the parity test does and does not establish: it proves that
+`declutter.patterns` has not drifted from this local snapshot. It proves nothing
+about mist.ai, because the snapshot itself is unverified against that commit.
+
+Do not edit the regex bodies to improve them.
 """
 
 from __future__ import annotations
