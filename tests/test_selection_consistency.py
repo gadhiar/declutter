@@ -47,6 +47,16 @@ def test_excluded_dirs_are_skipped_by_git_modes_too(git_repo, run_declutter):
         _git(git_repo, "add", "-f", f"{directory}/generated.md")
     _git(git_repo, "commit", "-q", "-m", "commit generated trees")
 
+    # Staged but deliberately not committed. Without this the index would equal
+    # HEAD by the time --staged runs, `git diff --cached` would return nothing,
+    # and the --staged assertions below would hold with the bug fully present.
+    staged_only = git_repo / "build" / "staged.md"
+    staged_only.write_text(ARROW_LINE, encoding="utf-8")
+    _git(git_repo, "add", "-f", "build/staged.md")
+    assert "build/staged.md" in _git(
+        git_repo, "diff", "--name-only", "--cached", "--diff-filter=ACMR"
+    ).stdout
+
     all_run = run_declutter(["check", "--all"], cwd=git_repo)
     changed_run = run_declutter(["check", "--changed-since", "main~1"], cwd=git_repo)
     staged_run = run_declutter(["check", "--staged"], cwd=git_repo)
@@ -56,6 +66,7 @@ def test_excluded_dirs_are_skipped_by_git_modes_too(git_repo, run_declutter):
     assert staged_run.returncode == 0, staged_run.stdout
     for result in (all_run, changed_run, staged_run):
         assert "build/generated.md" not in result.stdout
+        assert "build/staged.md" not in result.stdout
         assert "node_modules/generated.md" not in result.stdout
 
 
@@ -78,7 +89,12 @@ def test_critical_only_does_not_falsify_the_summary_counts(git_repo, run_declutt
     machine-readable report. If filtering zeroed the warning count, a consumer
     reading that JSON would conclude the tree had no warnings at all.
     """
-    (git_repo / "prose.md").write_text("An amazing seamless result\n", encoding="utf-8")
+    # Deliberately mixes severities: a critical finding as well as warnings, so
+    # that the "findings are narrowed to criticals" assertion below is checked
+    # against a non-empty list rather than passing vacuously over an empty one.
+    (git_repo / "prose.md").write_text(
+        "An amazing seamless result\n" + ARROW_LINE, encoding="utf-8"
+    )
 
     plain = run_declutter(["check", "--all", "--output", "-"], cwd=git_repo)
     filtered = run_declutter(
@@ -90,6 +106,7 @@ def test_critical_only_does_not_falsify_the_summary_counts(git_repo, run_declutt
     plain_counts = plain_report["summary"]["counts_by_severity"]
 
     assert plain_counts["warning"] > 0
+    assert plain_counts["critical"] > 0
     assert filtered_report["summary"]["counts_by_severity"] == plain_counts
 
     # The findings list, unlike the counts, really is narrowed.
