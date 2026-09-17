@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "declutter"
+version = "0.1.0"
+description = "Deterministic checks that keep code and prose free of AI slop and needless clutter."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+# The package itself is stdlib-only, and that is load-bearing: a consumer runs
+# the checker straight from a checkout with nothing installed. Test tooling is
+# declared separately below so it never becomes a runtime dependency.
+dependencies = []
+
+[project.optional-dependencies]
+# Pinned to the version baked into the claude-worker-declutter container image,
+# so a CI run and a local container run agree on the test runner rather than
+# differing silently. Installing this group is only ever needed to run the
+# suite; it is not needed to run `python -m declutter check`.
+dev = ["pytest==9.0.2"]
+
+[project.scripts]
+declutter = "declutter.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"declutter.prompts" = ["*.md"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]

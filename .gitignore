@@ -1,0 +1,18 @@
+# Build and packaging artefacts.
+build/
+dist/
+*.egg-info/
+*.whl
+
+# Bytecode and tool caches.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments.
+.venv/
+venv/
+
+# Harness output directories are generated, never committed.
+.declutter-harness/

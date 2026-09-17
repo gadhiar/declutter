@@ -1,0 +1,6 @@
+- id: declutter-check
+  name: declutter check
+  description: Check staged files for AI slop and needless clutter (critical findings only).
+  entry: declutter check --critical-only --files
+  language: python
+  files: \.(py|md|txt|yaml|yml|json|ts|tsx|js|rs|ps1|sh|dart)$
