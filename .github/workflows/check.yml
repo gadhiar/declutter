@@ -121,20 +121,20 @@ jobs:
       # that needed 0.
       - name: Checkout calling repository (shallow)
         if: inputs.mode != 'changed-since'
-        uses: actions/checkout@v4 # major-version tag: no network access at authoring time to resolve and pin a commit SHA; SHA-pinning this is the intended hardening.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: caller-repo
           fetch-depth: 1
 
       - name: Checkout calling repository (full history for diff-based mode)
         if: inputs.mode == 'changed-since'
-        uses: actions/checkout@v4 # major-version tag: see note above.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: caller-repo
           fetch-depth: 0
 
       - name: Checkout declutter at the pinned commit
-        uses: actions/checkout@v4 # major-version tag: see note above.
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: ${{ inputs.declutter-repository }}
           ref: ${{ inputs.declutter-ref }}
@@ -142,7 +142,7 @@ jobs:
           fetch-depth: 1
 
       - name: Set up Python
-        uses: actions/setup-python@v5 # major-version tag: see note above.
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: ${{ inputs.python-version }}
 
@@ -207,7 +207,7 @@ jobs:
 
       - name: Upload JSON report
         if: always() && inputs.report-path != ''
-        uses: actions/upload-artifact@v4 # major-version tag: see note above.
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: declutter-report
           path: caller-repo/${{ inputs.report-path }}
