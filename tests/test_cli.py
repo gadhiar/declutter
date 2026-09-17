@@ -78,7 +78,7 @@ def test_output_dash_is_pure_json_on_stdout(tmp_path, run_declutter):
     _write(f, "plain text\n")
     result = run_declutter(["check", "--files", str(f), "--output", "-"], tmp_path)
     report = json.loads(result.stdout)  # raises if stdout is not pure JSON
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert "declutter:" not in result.stdout
 
 
@@ -90,7 +90,7 @@ def test_output_file_is_pure_json(tmp_path, run_declutter):
     assert result.returncode == 0
     content = out.read_text(encoding="utf-8")
     report = json.loads(content)  # raises if not pure JSON
-    assert report["schema_version"] == 1
+    assert report["schema_version"] == 2
     assert "declutter:" not in content
 
 
