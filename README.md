@@ -34,12 +34,12 @@ work rather than history.
 - `--staged` -- files staged in git, judged on the lines the staged change
   touched.
 - `--changed-since REF` -- files changed since `REF`, judged on the lines
-  that change touched. The file set is the union of
-  `git diff --name-only --diff-filter=ACMR REF` and
-  `git ls-files --others --exclude-standard`, so a file that is new and
-  staged, and a file that is new and still untracked, are both found. An
-  untracked file counts as touched in full, because every line in it is
-  new.
+  that change touched. Both the files and their lines come from
+  `git diff --unified=0 --find-renames REF`, unioned with every untracked
+  file from `git ls-files --others --exclude-standard`, so a file that is
+  new and staged, and a file that is new and still untracked, are both
+  found. An untracked file counts as touched in full, because every line
+  in it is new.
 - `--lines PATH:START-END` -- judge `PATH` on the given lines. Repeatable,
   and a caller that knows the file it just wrote but has no git range to
   quote should use this. Ranges are 1-based and inclusive. `PATH:N` names

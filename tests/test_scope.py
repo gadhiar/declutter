@@ -179,3 +179,26 @@ def test_repeated_lines_flags_for_one_path_are_unioned():
 def test_malformed_lines_arguments_raise_rather_than_selecting_nothing(raw):
     with pytest.raises(ScopeError):
         scope.parse_lines_argument(raw)
+
+
+# --------------------------------------------------------------------------
+# git's quoted paths
+# --------------------------------------------------------------------------
+
+
+def test_a_quoted_non_ascii_path_decodes_to_the_real_filename():
+    """core.quotePath escapes each UTF-8 byte in octal, so decoding is two steps.
+
+    Getting this half-right is worse than failing outright: the path decodes
+    to mojibake, matches nothing on disk, and the file is dropped from the
+    selection without a word. The name below is "cafe.md" with an acute
+    accent, built from escapes so this test file stays pure ASCII.
+    """
+    quoted = '"b/caf\\303\\251.md"'
+    diff = f"--- /dev/null\n+++ {quoted}\n@@ -0,0 +1,2 @@\n+one\n+two\n"
+
+    touched = scope.parse_diff_touched_lines(diff)
+
+    expected = "caf" + chr(0xE9) + ".md"
+    assert list(touched) == [expected]
+    assert touched[expected].ranges == ((1, 2),)

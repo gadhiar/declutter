@@ -111,6 +111,12 @@ def test_a_deleted_line_carrying_a_finding_is_not_reported(git_repo, run_declutt
 
 
 def test_a_pure_rename_reports_nothing_and_is_not_wholly_touched(git_repo, run_declutter):
+    # Rename detection is switched off in this repository's config on purpose,
+    # so that the test pins declutter's explicit --find-renames rather than
+    # git's default. Without this line the test passes either way, because
+    # diff.renames defaults to true, and it would not notice the flag being
+    # dropped -- which is exactly what a mutation run found.
+    _git(git_repo, "config", "diff.renames", "false")
     _commit(git_repo, "old.md", ["one", SLOP, "three"])
     _git(git_repo, "mv", "old.md", "new.md")
 
@@ -393,7 +399,10 @@ def test_counts_by_severity_counts_in_scope_findings_only(git_repo, run_declutte
     is narrowed by scope -- and still taken before --critical-only filters.
     """
     _commit(git_repo, "doc.md", ["An amazing seamless result", "two", SLOP])
-    _write(git_repo / "doc.md", ["An amazing seamless result", "TWO", SLOP])
+    # The edited line carries a warning of its own, so the counts below are
+    # non-zero. With an all-zero count the --critical-only comparison would
+    # hold whatever the code did, and would prove nothing.
+    _write(git_repo / "doc.md", ["An amazing seamless result", "A fantastic two", SLOP])
 
     plain = run_declutter(["check", "--changed-since", "HEAD", "--output", "-"], git_repo)
     filtered = run_declutter(
@@ -401,6 +410,11 @@ def test_counts_by_severity_counts_in_scope_findings_only(git_repo, run_declutte
     )
 
     plain_counts = _report(plain)["summary"]["counts_by_severity"]
-    assert plain_counts == {"critical": 0, "warning": 0, "info": 0}
+    # In scope: the warning on the edited line, and nothing else. The critical
+    # on line 3 and the warnings on line 1 are history, and are set aside.
+    assert plain_counts == {"critical": 0, "warning": 1, "info": 0}
     assert _report(plain)["summary"]["out_of_scope_findings"] >= 2
+    # Still taken before --critical-only narrows the report, so the warning
+    # survives in the counts even though it is absent from the findings.
     assert _report(filtered)["summary"]["counts_by_severity"] == plain_counts
+    assert _report(filtered)["findings"] == []

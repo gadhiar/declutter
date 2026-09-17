@@ -160,11 +160,25 @@ def _strip_diff_prefix(raw: str) -> str | None:
     if path == "/dev/null":
         return None
     if path.startswith('"') and path.endswith('"') and len(path) >= 2:
-        # git quotes paths containing unusual bytes with C-style escapes.
-        path = path[1:-1].encode("latin-1", "backslashreplace").decode("unicode_escape")
+        path = _unquote_c_style(path[1:-1])
     if path.startswith("b/"):
         path = path[2:]
     return path
+
+
+def _unquote_c_style(body: str) -> str:
+    """Decode the inside of a git-quoted path, e.g. `caf\\303\\251.md`.
+
+    git quotes a path containing non-ASCII bytes (core.quotePath, on by
+    default) by escaping each *byte* of its UTF-8 encoding in octal. So the
+    decode is two steps, and doing only the first is a bug that hides files:
+    `unicode_escape` turns each escape into one character in the range
+    0-255, which is the byte, and those bytes are then UTF-8. Stopping there
+    yields mojibake -- `cafÃ©.md` -- which matches nothing on disk, so the
+    file is silently dropped from the selection rather than checked.
+    """
+    as_bytes = body.encode("latin-1", "backslashreplace").decode("unicode_escape")
+    return as_bytes.encode("latin-1", "backslashreplace").decode("utf-8", "replace")
 
 
 # --------------------------------------------------------------------------
