@@ -1,0 +1,6 @@
+# The shipped layer 2 prompt must be byte-identical on every platform. Its
+# sha256 is a published artefact: `python -m declutter.prompts` prints it and
+# tests/test_prompts.py pins it. A CRLF checkout on Windows changes those bytes,
+# which changes the hash and breaks the pinned test, so this file is always
+# checked out with LF endings regardless of core.autocrlf.
+src/declutter/prompts/layer2.md text eol=lf

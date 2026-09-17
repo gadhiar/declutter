@@ -124,7 +124,7 @@ def test_commitment_follows_slop_rules():
     # emoji anywhere -- checked structurally, not by re-running the whole
     # catalogue here.
     assert not re.search(r"[\U0001F300-\U0001F9FF\U0001FA70-\U0001FAFF]", text)
-    assert not re.search(r"[→←↔⇒⇐⇔]", text)
+    assert not re.search(r"[→←↔⇒⇐⇔]", text)  # declutter: allow=arrow_symbols
 
 
 def test_commitment_scope_boundaries_are_explicit():
