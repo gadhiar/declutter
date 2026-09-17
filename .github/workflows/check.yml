@@ -1,0 +1,225 @@
+name: Declutter check
+
+# Reusable workflow only. It has no other trigger, so it cannot run on its
+# own -- a caller invokes it with `uses:` and pins the commit it lives at,
+# e.g.:
+#
+#   jobs:
+#     declutter:
+#       uses: <owner>/declutter/.github/workflows/check.yml@<full-commit-sha>
+#       with:
+#         declutter-repository: <owner>/declutter
+#         declutter-ref: <full-commit-sha>
+#         mode: changed-since
+#         base-ref: origin/main
+#
+# Pin both the `uses:` line and `declutter-ref` by commit. There is no
+# "latest" or default ref anywhere in this file on purpose: floating onto
+# an unreviewed declutter change is exactly what pinning by commit exists
+# to prevent.
+
+on:
+  workflow_call:
+    inputs:
+      declutter-repository:
+        description: >-
+          The 'owner/repo' slug of the declutter checkout to run, e.g.
+          'octocat/declutter'. This should be the same repository named in
+          this workflow's own 'uses:' line. It cannot be inferred
+          automatically: inside a called reusable workflow, the github
+          context (including github.repository) reflects the calling
+          repository, not the repository that defines the workflow, so the
+          caller must say explicitly which repository to check out.
+        type: string
+        required: true
+      declutter-ref:
+        description: >-
+          Full commit SHA of declutter to check out and run the checker
+          from. Required, with no default: pin declutter by commit, never
+          by a branch or a tag, so a consumer never silently floats onto
+          an unreviewed change.
+        type: string
+        required: true
+      mode:
+        description: >-
+          Selection mode passed to 'python -m declutter check'. One of:
+          'staged' (--staged), 'changed-since' (--changed-since, requires
+          base-ref), 'all' (--all), or 'files' (--files, requires files).
+        type: string
+        required: true
+      base-ref:
+        description: >-
+          Base ref to diff against when mode is 'changed-since'; ignored
+          for every other mode, and required when mode is 'changed-since'.
+          Prefer a fully-qualified ref such as 'origin/main' or a commit
+          SHA over a bare branch name: a bare name may not resolve locally
+          unless a same-named branch happens to exist in this checkout.
+        type: string
+        required: false
+        default: ''
+      files:
+        description: >-
+          Space-separated list of file paths to check, relative to the
+          calling repository's root, when mode is 'files'. Ignored for
+          every other mode, and required when mode is 'files'.
+        type: string
+        required: false
+        default: ''
+      critical-only:
+        description: >-
+          Restrict the human-readable report to critical findings. This
+          only changes what is reported: a critical finding always fails
+          the job, and a warning or info finding never does, with or
+          without this flag.
+        type: boolean
+        required: false
+        default: false
+      python-version:
+        description: >-
+          Python version to set up to run the checker. declutter requires
+          Python 3.11 or later.
+        type: string
+        required: false
+        default: '3.11'
+      report-path:
+        description: >-
+          Path, relative to the calling repository's root, to write the
+          JSON report to. When set, the report is also uploaded as a
+          workflow artifact named 'declutter-report'. When left empty, no
+          JSON report is written and nothing is uploaded.
+        type: string
+        required: false
+        default: ''
+
+# Least privilege: this workflow only reads code and writes a build
+# artifact, and it must never gain the ability to touch a secret -- there
+# is no `secrets:` block anywhere in this file, and nothing here reads
+# `${{ secrets.* }}`.
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Run declutter check
+    runs-on: ubuntu-latest
+    steps:
+      # declutter is checked out as a sibling directory of the calling
+      # repository (both are explicit `path:` values below), never nested
+      # inside it. If declutter's source lived inside the calling
+      # repository's own tree, a `--all` run would walk and report on
+      # declutter's own files as if they belonged to the caller.
+
+      # Diff-based mode needs history beyond the last commit so that
+      # base-ref is reachable; every other mode only reads the working
+      # tree, so a depth-1 checkout is enough and keeps the common case
+      # fast. Two steps, gated by mode, rather than one step with a
+      # computed fetch-depth: a `mode == 'changed-since' && 0 || 1`
+      # expression is a known GitHub Actions trap, because 0 is falsy, so
+      # the trailing `|| 1` overwrites it back to 1 in exactly the case
+      # that needed 0.
+      - name: Checkout calling repository (shallow)
+        if: inputs.mode != 'changed-since'
+        uses: actions/checkout@v4 # major-version tag: no network access at authoring time to resolve and pin a commit SHA; SHA-pinning this is the intended hardening.
+        with:
+          path: caller-repo
+          fetch-depth: 1
+
+      - name: Checkout calling repository (full history for diff-based mode)
+        if: inputs.mode == 'changed-since'
+        uses: actions/checkout@v4 # major-version tag: see note above.
+        with:
+          path: caller-repo
+          fetch-depth: 0
+
+      - name: Checkout declutter at the pinned commit
+        uses: actions/checkout@v4 # major-version tag: see note above.
+        with:
+          repository: ${{ inputs.declutter-repository }}
+          ref: ${{ inputs.declutter-ref }}
+          path: declutter-src
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5 # major-version tag: see note above.
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      # declutter is stdlib-only and is deliberately not installed: it is
+      # run straight from its checkout via PYTHONPATH, so a consumer needs
+      # nothing beyond a Python interpreter.
+      - name: Run declutter check
+        id: declutter
+        working-directory: caller-repo
+        shell: bash
+        # The exit code is surfaced by the "Fail on critical finding or
+        # checker error" step below, via steps.declutter.outcome, which
+        # continue-on-error leaves reflecting the real result even though
+        # it lets the job carry on to upload the report first.
+        continue-on-error: true
+        env:
+          PYTHONPATH: ${{ github.workspace }}/declutter-src/src
+          DECLUTTER_MODE: ${{ inputs.mode }}
+          DECLUTTER_BASE_REF: ${{ inputs.base-ref }}
+          DECLUTTER_FILES: ${{ inputs.files }}
+          DECLUTTER_CRITICAL_ONLY: ${{ inputs.critical-only }}
+          DECLUTTER_REPORT_PATH: ${{ inputs.report-path }}
+        run: |
+          set -eu
+          args=()
+          case "$DECLUTTER_MODE" in
+            staged)
+              args+=(--staged)
+              ;;
+            changed-since)
+              if [ -z "$DECLUTTER_BASE_REF" ]; then
+                echo "::error::mode 'changed-since' requires 'base-ref' to be set" >&2
+                exit 2
+              fi
+              args+=(--changed-since "$DECLUTTER_BASE_REF")
+              ;;
+            all)
+              args+=(--all)
+              ;;
+            files)
+              if [ -z "$DECLUTTER_FILES" ]; then
+                echo "::error::mode 'files' requires 'files' to be set" >&2
+                exit 2
+              fi
+              # Intentional word-splitting: DECLUTTER_FILES is a
+              # space-separated list of paths, not a single argument.
+              file_args=($DECLUTTER_FILES)
+              args+=(--files "${file_args[@]}")
+              ;;
+            *)
+              echo "::error::unknown mode '$DECLUTTER_MODE': must be staged, changed-since, all or files" >&2
+              exit 2
+              ;;
+          esac
+          if [ "$DECLUTTER_CRITICAL_ONLY" = "true" ]; then
+            args+=(--critical-only)
+          fi
+          if [ -n "$DECLUTTER_REPORT_PATH" ]; then
+            args+=(--output "$DECLUTTER_REPORT_PATH")
+          fi
+          python -m declutter check "${args[@]}"
+
+      - name: Upload JSON report
+        if: always() && inputs.report-path != ''
+        uses: actions/upload-artifact@v4 # major-version tag: see note above.
+        with:
+          name: declutter-report
+          path: caller-repo/${{ inputs.report-path }}
+
+      # Surfaces the checker's own exit code as the job result: 0 (no
+      # critical finding) is the only outcome that leaves this step, and
+      # the job, green. steps.<id>.outcome reflects the pre-continue-on-error
+      # result, unlike steps.<id>.conclusion, so this sees the real failure
+      # even though the run step above was allowed to carry on.
+      - name: Fail on critical finding or checker error
+        if: always()
+        shell: bash
+        run: |
+          if [ "${{ steps.declutter.outcome }}" != "success" ]; then
+            echo "::error::declutter check did not pass; see the 'Run declutter check' step above for the exit code and findings" >&2
+            exit 1
+          fi
