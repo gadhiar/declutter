@@ -15,6 +15,7 @@ import re
 from pathlib import Path
 
 from declutter import cli, prompts
+from declutter.scope import TouchedLines
 
 # Pinned so an accidental, or silent, edit to the shipped prompt fails this
 # test loudly. A deliberate edit to layer2.md must update this constant, and
@@ -48,7 +49,12 @@ def test_prompt_passes_the_checker_at_critical_level():
     # Dogfooding: the prompt that demands clean output must itself produce
     # none of the findings that would block a run.
     resource_path = Path(str(importlib.resources.files("declutter.prompts").joinpath("layer2.md")))
-    report = cli._build_report([resource_path], resource_path.parent, critical_only=False)
+    report = cli._build_report(
+        [(resource_path, TouchedLines.whole())],
+        resource_path.parent,
+        critical_only=False,
+        scope_name=cli.SCOPE_CHANGED_FILES,
+    )
     critical = [f for f in report["findings"] if f["severity"] == "critical"]
     assert critical == []
     assert report["exit_code"] == 0
